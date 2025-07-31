@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RPA Socket.IO Multi-Room Demo</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .rooms-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .room {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease;
+        }
+
+        .room:hover {
+            transform: translateY(-5px);
+        }
+
+        .room-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .room-title {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .room-status {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+
+        .status-connected {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .controls {
+            margin-bottom: 15px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            margin-right: 8px;
+            margin-bottom: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #0056b3;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #1e7e34;
+        }
+
+        .btn-warning {
+            background: #ffc107;
+            color: #212529;
+        }
+
+        .btn-warning:hover {
+            background: #e0a800;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .log-container {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 3px 0;
+        }
+
+        .log-info {
+            color: #17a2b8;
+        }
+
+        .log-success {
+            color: #28a745;
+        }
+
+        .log-warning {
+            color: #ffc107;
+        }
+
+        .log-error {
+            color: #dc3545;
+        }
+
+        .log-event {
+            color: #6f42c1;
+        }
+
+        .global-controls {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .global-controls h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #007bff;
+        }
+
+        .stat-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 RPA Socket.IO Multi-Room Demo</h1>
+            <p>Demonstrating isolated communication between multiple rooms and clients</p>
+        </div>
+
+        <div class="global-controls">
+            <h3>🌐 Global Controls</h3>
+            <button class="btn btn-primary" onclick="connectAllRooms()">Connect All Rooms</button>
+            <button class="btn btn-success" onclick="sendStepsToAllRooms()">Send Steps to All Rooms</button>
+            <button class="btn btn-warning" onclick="getAllRoomInfo()">Get All Room Info</button>
+            <button class="btn btn-danger" onclick="disconnectAllRooms()">Disconnect All</button>
+            
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-number" id="totalConnections">0</div>
+                    <div class="stat-label">Total Connections</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="totalSteps">0</div>
+                    <div class="stat-label">Total Steps Sent</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="totalEvents">0</div>
+                    <div class="stat-label">Total Events</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="rooms-grid" id="roomsGrid">
+            <!-- Rooms will be dynamically generated -->
+        </div>
+    </div>
+
+    <script>
+        const rooms = ['room-1', 'room-2', 'room-3'];
+        const clientsPerRoom = 2;
+        const clients = {};
+        let totalSteps = 0;
+        let totalEvents = 0;
+
+        // Initialize rooms
+        function initializeRooms() {
+            const grid = document.getElementById('roomsGrid');
+            grid.innerHTML = '';
+
+            rooms.forEach(roomId => {
+                const roomElement = createRoomElement(roomId);
+                grid.appendChild(roomElement);
+            });
+        }
+
+        function createRoomElement(roomId) {
+            const roomDiv = document.createElement('div');
+            roomDiv.className = 'room';
+            roomDiv.id = `room-${roomId}`;
+
+            roomDiv.innerHTML = `
+                <div class="room-header">
+                    <div class="room-title">🏠 ${roomId}</div>
+                    <div class="room-status status-disconnected" id="status-${roomId}">Disconnected</div>
+                </div>
+                <div class="controls">
+                    <button class="btn btn-primary" onclick="connectRoom('${roomId}')">Connect</button>
+                    <button class="btn btn-success" onclick="sendStepsToRoom('${roomId}')">Send Steps</button>
+                    <button class="btn btn-warning" onclick="getRoomInfo('${roomId}')">Room Info</button>
+                    <button class="btn btn-danger" onclick="disconnectRoom('${roomId}')">Disconnect</button>
+                </div>
+                <div class="log-container" id="log-${roomId}">
+                    <div class="log-entry log-info">Room ${roomId} initialized. Click "Connect" to start.</div>
+                </div>
+            `;
+
+            return roomDiv;
+        }
+
+        function logToRoom(roomId, message, type = 'info') {
+            const logContainer = document.getElementById(`log-${roomId}`);
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry log-${type}`;
+            logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+            totalEvents++;
+            updateStats();
+        }
+
+        function updateStats() {
+            document.getElementById('totalSteps').textContent = totalSteps;
+            document.getElementById('totalEvents').textContent = totalEvents;
+            
+            let totalConnections = 0;
+            Object.values(clients).forEach(roomClients => {
+                totalConnections += roomClients.length;
+            });
+            document.getElementById('totalConnections').textContent = totalConnections;
+        }
+
+        function connectRoom(roomId) {
+            if (clients[roomId]) {
+                logToRoom(roomId, 'Room already connected', 'warning');
+                return;
+            }
+
+            clients[roomId] = [];
+            logToRoom(roomId, 'Connecting to room...', 'info');
+
+            for (let i = 0; i < clientsPerRoom; i++) {
+                const sessionId = `${roomId}-session-${i + 1}`;
+                const clientId = `${roomId}-client-${i + 1}`;
+
+                const socket = io('http://localhost:3000', {
+                    query: {
+                        sessionId: sessionId,
+                        roomId: roomId
+                    }
+                });
+
+                const clientInfo = {
+                    socket: socket,
+                    sessionId: sessionId,
+                    clientId: clientId
+                };
+
+                clients[roomId].push(clientInfo);
+
+                // Socket events
+                socket.on('connect', () => {
+                    logToRoom(roomId, `✅ ${clientId} connected`, 'success');
+                    updateRoomStatus(roomId);
+                });
+
+                socket.on('disconnect', () => {
+                    logToRoom(roomId, `❌ ${clientId} disconnected`, 'error');
+                    updateRoomStatus(roomId);
+                });
+
+                socket.on('room_joined', (data) => {
+                    logToRoom(roomId, `🏠 ${clientId} joined room: ${data.message}`, 'event');
+                });
+
+                socket.on('user_joined', (data) => {
+                    logToRoom(roomId, `👋 New user joined: ${data.clientId}`, 'event');
+                });
+
+                socket.on('user_left', (data) => {
+                    logToRoom(roomId, `👋 User left: ${data.clientId}`, 'event');
+                });
+
+                socket.on('step_recorded', (data) => {
+                    logToRoom(roomId, `📝 Step recorded: ${data.step.action}`, 'event');
+                });
+
+                socket.on('step_completed', (data) => {
+                    logToRoom(roomId, `✅ Step completed: ${data.step.action}`, 'success');
+                });
+
+                socket.on('room_info', (data) => {
+                    logToRoom(roomId, `ℹ️ Room info: ${data.clientCount} clients`, 'info');
+                });
+
+                socket.on('connect_error', (error) => {
+                    logToRoom(roomId, `❌ Connection error: ${error.message}`, 'error');
+                });
+            }
+        }
+
+        function disconnectRoom(roomId) {
+            if (!clients[roomId]) {
+                logToRoom(roomId, 'Room not connected', 'warning');
+                return;
+            }
+
+            clients[roomId].forEach(clientInfo => {
+                clientInfo.socket.disconnect();
+            });
+
+            delete clients[roomId];
+            logToRoom(roomId, 'All clients disconnected', 'info');
+            updateRoomStatus(roomId);
+        }
+
+        function sendStepsToRoom(roomId) {
+            if (!clients[roomId]) {
+                logToRoom(roomId, 'Room not connected', 'warning');
+                return;
+            }
+
+            logToRoom(roomId, 'Sending test steps...', 'info');
+
+            clients[roomId].forEach((clientInfo, index) => {
+                setTimeout(() => {
+                    const testStep = {
+                        sessionId: clientInfo.sessionId,
+                        step: {
+                            id: `step-${Date.now()}-${index}`,
+                            action: `test-action-${index + 1}`,
+                            data: `test-data-from-${clientInfo.clientId}`,
+                            timestamp: new Date().toISOString()
+                        }
+                    };
+
+                    clientInfo.socket.emit('recordStep', testStep);
+                    logToRoom(roomId, `📤 ${clientInfo.clientId} sent step: ${testStep.step.action}`, 'info');
+                    totalSteps++;
+                    updateStats();
+                }, index * 500);
+            });
+        }
+
+        function getRoomInfo(roomId) {
+            if (!clients[roomId] || clients[roomId].length === 0) {
+                logToRoom(roomId, 'No clients connected', 'warning');
+                return;
+            }
+
+            clients[roomId][0].socket.emit('getRoomInfo');
+            logToRoom(roomId, 'Requesting room information...', 'info');
+        }
+
+        function updateRoomStatus(roomId) {
+            const statusElement = document.getElementById(`status-${roomId}`);
+            if (clients[roomId] && clients[roomId].length > 0) {
+                const connectedClients = clients[roomId].filter(client => client.socket.connected).length;
+                statusElement.textContent = `Connected (${connectedClients}/${clients[roomId].length})`;
+                statusElement.className = 'room-status status-connected';
+            } else {
+                statusElement.textContent = 'Disconnected';
+                statusElement.className = 'room-status status-disconnected';
+            }
+        }
+
+        // Global functions
+        function connectAllRooms() {
+            rooms.forEach(roomId => {
+                if (!clients[roomId]) {
+                    connectRoom(roomId);
+                }
+            });
+        }
+
+        function disconnectAllRooms() {
+            rooms.forEach(roomId => {
+                if (clients[roomId]) {
+                    disconnectRoom(roomId);
+                }
+            });
+        }
+
+        function sendStepsToAllRooms() {
+            rooms.forEach((roomId, index) => {
+                setTimeout(() => {
+                    if (clients[roomId]) {
+                        sendStepsToRoom(roomId);
+                    }
+                }, index * 1000);
+            });
+        }
+
+        function getAllRoomInfo() {
+            rooms.forEach(roomId => {
+                if (clients[roomId]) {
+                    getRoomInfo(roomId);
+                }
+            });
+        }
+
+        // Initialize the interface
+        initializeRooms();
+        updateStats();
+
+        // Auto-connect after a delay for demo purposes
+        setTimeout(() => {
+            console.log('Auto-connecting to all rooms for demo...');
+            connectAllRooms();
+        }, 2000);
+    </script>
+</body>
+</html> 
